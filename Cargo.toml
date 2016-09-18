@@ -1,0 +1,6 @@
+[package]
+name = "bitpack"
+version = "0.1.0"
+authors = ["quininer kel <quininer@live.com>"]
+
+[dependencies]
