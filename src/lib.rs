@@ -61,25 +61,41 @@ impl<'a> BitPack<'a> {
 
 
 #[test]
-fn test_write() {
+fn test_bitpack() {
     let mut buff = [0; 2];
-    let mut bitpack = BitPack::new(&mut buff);
 
-    bitpack.write(10, 4).unwrap();
-    bitpack.write(1021, 10).unwrap();
-    bitpack.write(3, 2).unwrap();
+    {
+        let mut bitpack = BitPack::new(&mut buff);
 
-    assert_eq!(bitpack.buff[0], 175);
-    assert_eq!(bitpack.buff[1], 247);
+        bitpack.write(10, 4).unwrap();
+        bitpack.write(1021, 10).unwrap();
+        bitpack.write(3, 2).unwrap();
+    }
+
+    {
+        let mut bitpack = BitPack::new(&mut buff);
+
+        assert_eq!(bitpack.read(4).unwrap(), 10);
+        assert_eq!(bitpack.read(10).unwrap(), 1021);
+        assert_eq!(bitpack.read(2).unwrap(), 3);
+    }
 }
 
-
 #[test]
-fn test_read() {
-    let mut buff = [175, 247];
-    let mut bitpack = BitPack::new(&mut buff);
+fn test_lowbit() {
+    let mut buff = [0; 3];
 
-    assert_eq!(bitpack.read(4).unwrap(), 10);
-    assert_eq!(bitpack.read(10).unwrap(), 1021);
-    assert_eq!(bitpack.read(2).unwrap(), 3);
+    {
+        let mut bitpack = BitPack::new(&mut buff);
+        bitpack.write(1, 4).unwrap();
+        bitpack.write(0, 4).unwrap();
+        bitpack.write(0, 4).unwrap();
+    }
+
+    {
+        let mut bitpack = BitPack::new(&mut buff);
+        assert_eq!(bitpack.read(4).unwrap(), 1);
+        assert_eq!(bitpack.read(4).unwrap(), 0);
+        assert_eq!(bitpack.read(4).unwrap(), 0);
+    }
 }
