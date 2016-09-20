@@ -7,11 +7,11 @@ use byteorder::{ LittleEndian, ByteOrder };
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct BitPack<'b> {
-    buff: &'b mut [u8],
-    bits_left: usize,
-    bits_buf: u32,
-    bits: usize,
-    cursor: usize
+    pub buff: &'b mut [u8],
+    pub cursor: usize,
+    pub bits_left: usize,
+    pub bits_buf: u32,
+    pub bits: usize
 }
 
 impl<'a> BitPack<'a> {
@@ -22,6 +22,7 @@ impl<'a> BitPack<'a> {
     }
 
     pub fn from(buff: &'a mut [u8]) -> BitPack<'a> {
+        assert_eq!(buff.len() % 4, 0);
         BitPack {
             buff: buff,
             bits_left: 0,
@@ -36,11 +37,8 @@ impl<'a> BitPack<'a> {
         if bits < 32 {
             value &= (1 << bits) - 1;
         }
-        if self.buff.len() * 8 < self.bits + bits {
-            return Err(());
-        } else {
-            self.bits += bits;
-        }
+        if self.buff.len() * 8 < self.bits + bits { return Err(()) };
+        self.bits += bits;
 
         loop {
             if bits <= self.bits_left {
@@ -49,7 +47,7 @@ impl<'a> BitPack<'a> {
                 break
             }
 
-            self.bits_buf |= value << (bits - self.bits_left);
+            self.bits_buf |= value >> (bits - self.bits_left);
             value &= (1 << (bits - self.bits_left)) - 1;
             bits -= self.bits_left;
 
@@ -131,5 +129,29 @@ fn test_lowbit() {
         assert_eq!(bitpack.read(1).unwrap(), 1);
         assert_eq!(bitpack.read(1).unwrap(), 0);
         assert_eq!(bitpack.read(1).unwrap(), 0);
+    }
+}
+
+#[test]
+fn test_bigbit() {
+    let mut buff = [0; 8];
+
+    {
+        let mut bitpack = BitPack::new(&mut buff);
+        bitpack.write(255, 8).unwrap();
+        bitpack.write(65535, 16).unwrap();
+        bitpack.write(65535, 16).unwrap();
+        bitpack.write(255, 8).unwrap();
+        bitpack.write(65535, 16).unwrap();
+        bitpack.flush();
+    }
+
+    {
+        let mut bitpack = BitPack::from(&mut buff);
+        assert_eq!(bitpack.read(8).unwrap(), 255);
+        assert_eq!(bitpack.read(16).unwrap(), 65535);
+        assert_eq!(bitpack.read(16).unwrap(), 65535);
+        assert_eq!(bitpack.read(8).unwrap(), 255);
+        assert_eq!(bitpack.read(16).unwrap(), 65535);
     }
 }
