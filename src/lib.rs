@@ -125,6 +125,7 @@ fn test_lowbit() {
         bitpack.write(1, 1).unwrap();
         bitpack.write(0, 1).unwrap();
         bitpack.write(0, 1).unwrap();
+        bitpack.write(1, 1).unwrap();
         bitpack.flush();
     }
 
@@ -133,6 +134,7 @@ fn test_lowbit() {
         assert_eq!(bitpack.read(1).unwrap(), 1);
         assert_eq!(bitpack.read(1).unwrap(), 0);
         assert_eq!(bitpack.read(1).unwrap(), 0);
+        assert_eq!(bitpack.read(1).unwrap(), 1);
     }
 }
 
@@ -157,5 +159,30 @@ fn test_bigbit() {
         assert_eq!(bitpack.read(16).unwrap(), 65535);
         assert_eq!(bitpack.read(8).unwrap(), 255);
         assert_eq!(bitpack.read(16).unwrap(), 65535);
+    }
+}
+
+#[test]
+fn test_longlowbit() {
+    let input = [
+        1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0,
+        1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+        0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let mut buff = [0; 8];
+
+    {
+        let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
+        for &b in &input[..] {
+            bitpack.write(b, 1).unwrap();
+        }
+        bitpack.flush();
+    }
+
+    {
+        let mut bitpack = BitPack::<&[u8]>::new(&buff);
+        for &b in &input[..] {
+            assert_eq!(bitpack.read(1).unwrap(), b);
+        }
     }
 }
