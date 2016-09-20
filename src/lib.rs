@@ -6,26 +6,20 @@ use byteorder::{ LittleEndian, ByteOrder };
 
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct BitPack<'b> {
-    pub buff: &'b mut [u8],
+pub struct BitPack<B> {
+    pub buff: B,
     pub cursor: usize,
     pub bits_left: usize,
     pub bits_buf: u32,
     pub bits: usize
 }
 
-impl<'a> BitPack<'a> {
-    pub fn new(buff: &'a mut [u8]) -> BitPack<'a> {
-        let mut bitpack = BitPack::from(buff);
-        bitpack.bits_left = 32;
-        bitpack
-    }
-
-    pub fn from(buff: &'a mut [u8]) -> BitPack<'a> {
+impl<'a> BitPack<&'a mut [u8]> {
+    pub fn new(buff: &mut [u8]) -> BitPack<&mut [u8]> {
         assert_eq!(buff.len() % 4, 0);
         BitPack {
             buff: buff,
-            bits_left: 0,
+            bits_left: 32,
             bits_buf: 0,
             bits: 0,
             cursor: 0
@@ -57,6 +51,26 @@ impl<'a> BitPack<'a> {
         Ok(())
     }
 
+    pub fn flush(&mut self) {
+        LittleEndian::write_u32(&mut self.buff[self.cursor..], self.bits_buf);
+        self.cursor += 4;
+        self.bits_buf = 0;
+        self.bits_left = 32;
+    }
+}
+
+impl<'a> BitPack<&'a [u8]> {
+    pub fn new(buff: &[u8]) -> BitPack<&[u8]> {
+        assert_eq!(buff.len() % 4, 0);
+        BitPack {
+            buff: buff,
+            bits_left: 0,
+            bits_buf: 0,
+            bits: 0,
+            cursor: 0
+        }
+    }
+
     pub fn read(&mut self, mut bits: usize) -> Result<u32, ()> {
         if bits > 32 { return Err(()) };
         if self.buff.len() * 8 < self.bits + bits { return Err(()) };
@@ -79,13 +93,6 @@ impl<'a> BitPack<'a> {
         }
         Ok(output)
     }
-
-    pub fn flush(&mut self) {
-        LittleEndian::write_u32(&mut self.buff[self.cursor..], self.bits_buf);
-        self.cursor += 4;
-        self.bits_buf = 0;
-        self.bits_left = 32;
-    }
 }
 
 
@@ -94,8 +101,7 @@ fn test_bitpack() {
     let mut buff = [0; 4];
 
     {
-        let mut bitpack = BitPack::new(&mut buff);
-
+        let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
         bitpack.write(10, 4).unwrap();
         bitpack.write(1021, 10).unwrap();
         bitpack.write(3, 2).unwrap();
@@ -103,9 +109,7 @@ fn test_bitpack() {
     }
 
     {
-        let mut bitpack = BitPack::from(&mut buff);
-
-        bitpack.bits_left = 0;
+        let mut bitpack = BitPack::<&[u8]>::new(&buff);
         assert_eq!(bitpack.read(4).unwrap(), 10);
         assert_eq!(bitpack.read(10).unwrap(), 1021);
         assert_eq!(bitpack.read(2).unwrap(), 3);
@@ -117,7 +121,7 @@ fn test_lowbit() {
     let mut buff = [0; 4];
 
     {
-        let mut bitpack = BitPack::new(&mut buff);
+        let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
         bitpack.write(1, 1).unwrap();
         bitpack.write(0, 1).unwrap();
         bitpack.write(0, 1).unwrap();
@@ -125,7 +129,7 @@ fn test_lowbit() {
     }
 
     {
-        let mut bitpack = BitPack::from(&mut buff);
+        let mut bitpack = BitPack::<&[u8]>::new(&buff);
         assert_eq!(bitpack.read(1).unwrap(), 1);
         assert_eq!(bitpack.read(1).unwrap(), 0);
         assert_eq!(bitpack.read(1).unwrap(), 0);
@@ -137,7 +141,7 @@ fn test_bigbit() {
     let mut buff = [0; 8];
 
     {
-        let mut bitpack = BitPack::new(&mut buff);
+        let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
         bitpack.write(255, 8).unwrap();
         bitpack.write(65535, 16).unwrap();
         bitpack.write(65535, 16).unwrap();
@@ -147,7 +151,7 @@ fn test_bigbit() {
     }
 
     {
-        let mut bitpack = BitPack::from(&mut buff);
+        let mut bitpack = BitPack::<&[u8]>::new(&buff);
         assert_eq!(bitpack.read(8).unwrap(), 255);
         assert_eq!(bitpack.read(16).unwrap(), 65535);
         assert_eq!(bitpack.read(16).unwrap(), 65535);
