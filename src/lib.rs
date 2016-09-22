@@ -108,6 +108,8 @@ fn test_bitpack() {
         bitpack.flush();
     }
 
+    assert_eq!(buff, [0, 0, 247, 175]);
+
     {
         let mut bitpack = BitPack::<&[u8]>::new(&buff);
         assert_eq!(bitpack.read(4).unwrap(), 10);
