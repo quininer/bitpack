@@ -5,6 +5,9 @@ extern crate byteorder;
 use byteorder::{ LittleEndian, ByteOrder };
 
 
+pub const BUF_BITS: usize = 32;
+const BYTE_BITS: usize = 8;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct BitPack<B> {
     pub buff: B,
@@ -16,10 +19,10 @@ pub struct BitPack<B> {
 
 impl<'a> BitPack<&'a mut [u8]> {
     pub fn new(buff: &mut [u8]) -> BitPack<&mut [u8]> {
-        assert_eq!(buff.len() % 4, 0);
+        assert_eq!(buff.len() % (BUF_BITS / BYTE_BITS), 0);
         BitPack {
             buff: buff,
-            bits_left: 32,
+            bits_left: BUF_BITS,
             bits_buf: 0,
             bits: 0,
             cursor: 0
@@ -27,11 +30,11 @@ impl<'a> BitPack<&'a mut [u8]> {
     }
 
     pub fn write(&mut self, mut value: u32, mut bits: usize) -> Result<(), ()> {
-        if bits > 32 { return Err(()) };
-        if bits < 32 {
+        if bits > BUF_BITS { return Err(()) };
+        if bits < BUF_BITS {
             value &= (1 << bits) - 1;
         }
-        if self.buff.len() * 8 < self.bits + bits { return Err(()) };
+        if self.buff.len() * BYTE_BITS < self.bits + bits { return Err(()) };
         self.bits += bits;
 
         loop {
@@ -53,15 +56,15 @@ impl<'a> BitPack<&'a mut [u8]> {
 
     pub fn flush(&mut self) {
         LittleEndian::write_u32(&mut self.buff[self.cursor..], self.bits_buf);
-        self.cursor += 4;
+        self.cursor += BUF_BITS / BYTE_BITS;
         self.bits_buf = 0;
-        self.bits_left = 32;
+        self.bits_left = BUF_BITS;
     }
 }
 
 impl<'a> BitPack<&'a [u8]> {
     pub fn new(buff: &[u8]) -> BitPack<&[u8]> {
-        assert_eq!(buff.len() % 4, 0);
+        assert_eq!(buff.len() % (BUF_BITS / BYTE_BITS), 0);
         BitPack {
             buff: buff,
             bits_left: 0,
@@ -72,14 +75,14 @@ impl<'a> BitPack<&'a [u8]> {
     }
 
     pub fn read(&mut self, mut bits: usize) -> Result<u32, ()> {
-        if bits > 32 { return Err(()) };
-        if self.buff.len() * 8 < self.bits + bits { return Err(()) };
+        if bits > BUF_BITS { return Err(()) };
+        if self.buff.len() * BYTE_BITS < self.bits + bits { return Err(()) };
         let mut output = 0;
         loop {
             if self.bits_left == 0 {
                 self.bits_buf = LittleEndian::read_u32(&self.buff[self.cursor..]);
-                self.cursor += 4;
-                self.bits_left = 32;
+                self.cursor += BUF_BITS / BYTE_BITS;
+                self.bits_left = BUF_BITS;
             }
             if bits <= self.bits_left {
                 output |= self.bits_buf >> (self.bits_left - bits);
