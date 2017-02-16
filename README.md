@@ -2,7 +2,7 @@ bitpack
 -------
 
 ```rust
-let mut buff = [0; 4];
+let mut buff = [0; 2];
 
 // write
 {
@@ -13,7 +13,7 @@ let mut buff = [0; 4];
     bitpack.flush();
 }
 
-assert_eq!(buff, [0, 0, 247, 175]);
+assert_eq!(buff, [218, 255]);
 
 // read
 {

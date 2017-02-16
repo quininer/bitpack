@@ -1,98 +1,117 @@
 #![no_std]
 
-extern crate byteorder;
 
-use byteorder::{ LittleEndian, ByteOrder };
-
-
-pub const BUF_BITS: usize = 32;
+const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct BitPack<B> {
     pub buff: B,
     pub cursor: usize,
-    pub bits_left: usize,
-    pub bits_buf: u32,
     pub bits: usize
 }
 
 impl<'a> BitPack<&'a mut [u8]> {
     pub fn new(buff: &mut [u8]) -> BitPack<&mut [u8]> {
-        assert_eq!(buff.len() % (BUF_BITS / BYTE_BITS), 0);
         BitPack {
             buff: buff,
-            bits_left: BUF_BITS,
-            bits_buf: 0,
-            bits: 0,
-            cursor: 0
+            cursor: 0,
+            bits: 0
         }
     }
 
+    #[inline]
+    pub fn bits(&self) -> usize {
+        self.cursor * BYTE_BITS + self.bits
+    }
+
     pub fn write(&mut self, mut value: u32, mut bits: usize) -> Result<(), ()> {
-        if bits > BUF_BITS { return Err(()) };
-        if bits < BUF_BITS {
+        if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.bits() + bits {
+            return Err(());
+        }
+        if bits < MAX_BITS {
             value &= (1 << bits) - 1;
         }
-        if self.buff.len() * BYTE_BITS < self.bits + bits { return Err(()) };
-        self.bits += bits;
 
         loop {
-            if bits <= self.bits_left {
-                self.bits_buf |= value << (self.bits_left - bits);
-                self.bits_left -= bits;
+            let bits_left = BYTE_BITS - self.bits;
+
+            if bits <= bits_left {
+                self.buff[self.cursor] |= (value as u8) << self.bits;
+                self.bits += bits;
+
+                if self.bits >= BYTE_BITS {
+                    self.flush();
+                }
+
                 break
             }
 
-            self.bits_buf |= value >> (bits - self.bits_left);
-            value &= (1 << (bits - self.bits_left)) - 1;
-            bits -= self.bits_left;
+            let vv = value & (1 << bits_left) - 1;
+            self.buff[self.cursor] |= (vv as u8) << self.bits;
+            self.bits += bits_left;
+            value >>= bits_left;
+            bits -= bits_left;
 
             self.flush();
         }
-
         Ok(())
     }
 
     pub fn flush(&mut self) {
-        LittleEndian::write_u32(&mut self.buff[self.cursor..], self.bits_buf);
-        self.cursor += BUF_BITS / BYTE_BITS;
-        self.bits_buf = 0;
-        self.bits_left = BUF_BITS;
+        if self.bits > 0 {
+            self.cursor += 1;
+            self.bits = 0;
+        }
     }
 }
 
+
 impl<'a> BitPack<&'a [u8]> {
     pub fn new(buff: &[u8]) -> BitPack<&[u8]> {
-        assert_eq!(buff.len() % (BUF_BITS / BYTE_BITS), 0);
         BitPack {
             buff: buff,
-            bits_left: 0,
-            bits_buf: 0,
-            bits: 0,
-            cursor: 0
+            cursor: 0,
+            bits: 0
         }
     }
 
+    #[inline]
+    pub fn bits(&self) -> usize {
+        self.cursor * BYTE_BITS + self.bits
+    }
+
     pub fn read(&mut self, mut bits: usize) -> Result<u32, ()> {
-        if bits > BUF_BITS { return Err(()) };
-        if self.buff.len() * BYTE_BITS < self.bits + bits { return Err(()) };
+        if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.bits() + bits {
+            return Err(());
+        };
+
+        let mut bits_left = 0;
         let mut output = 0;
         loop {
-            if self.bits_left == 0 {
-                self.bits_buf = LittleEndian::read_u32(&self.buff[self.cursor..]);
-                self.cursor += BUF_BITS / BYTE_BITS;
-                self.bits_left = BUF_BITS;
-            }
-            if bits <= self.bits_left {
-                output |= self.bits_buf >> (self.bits_left - bits);
-                self.bits_buf &= (1 << (self.bits_left - bits)) - 1;
-                self.bits_left -= bits;
+            let byte_left = BYTE_BITS - self.bits;
+
+            if bits <= byte_left {
+                let mut bb = self.buff[self.cursor] as u32;
+                bb >>= self.bits;
+                bb &= (1 << bits) - 1;
+                output |= bb << bits_left;
+                self.bits += bits;
                 break
             }
-            output |= self.bits_buf << (bits - self.bits_left);
-            bits -= self.bits_left;
-            self.bits_left = 0;
+
+            let mut bb = self.buff[self.cursor] as u32;
+            bb >>= self.bits;
+            bb &= (1 << byte_left) - 1;
+            output |= bb << bits_left;
+            self.bits += byte_left;
+            bits_left += byte_left;
+            bits -= byte_left;
+
+            if self.bits >= BYTE_BITS {
+                self.cursor += 1;
+                self.bits -= BYTE_BITS;
+            }
         }
         Ok(output)
     }
@@ -101,7 +120,7 @@ impl<'a> BitPack<&'a [u8]> {
 
 #[test]
 fn test_bitpack() {
-    let mut buff = [0; 4];
+    let mut buff = [0; 2];
 
     {
         let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
@@ -111,7 +130,7 @@ fn test_bitpack() {
         bitpack.flush();
     }
 
-    assert_eq!(buff, [0, 0, 247, 175]);
+    assert_eq!(buff, [218, 255]);
 
     {
         let mut bitpack = BitPack::<&[u8]>::new(&buff);
@@ -123,7 +142,7 @@ fn test_bitpack() {
 
 #[test]
 fn test_lowbit() {
-    let mut buff = [0; 4];
+    let mut buff = [0; 1];
 
     {
         let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);

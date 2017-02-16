@@ -1,10 +1,9 @@
 [package]
 name = "bitpack"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["quininer kel <quininer@live.com>"]
 description = "Rust bitpack library."
 repository = "https://github.com/quininer/bitpack"
 license = "MIT"
 
 [dependencies]
-byteorder = { version = "1.0", default-features = false }
