@@ -1,33 +1,56 @@
-#![no_std]
+#![cfg_attr(not(feature = "use_std"), no_std)]
+#![cfg_attr(
+    all(not(feature = "use_std"), feature = "use_vec"),
+    feature(collections)
+)]
+
+#[cfg(all(not(feature = "use_std"), feature = "use_vec"))]
+extern crate collections;
+
+#[cfg(any(feature = "use_std", feature = "use_vec"))]
+mod vec;
 
 
-const MAX_BITS: usize = 32;
+pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BitPack<B> {
-    pub buff: B,
-    pub cursor: usize,
-    pub bits: usize
+    buff: B,
+    cursor: usize,
+    bits: usize
 }
 
-impl<'a> BitPack<&'a mut [u8]> {
-    pub fn new(buff: &mut [u8]) -> BitPack<&mut [u8]> {
-        BitPack {
-            buff: buff,
-            cursor: 0,
-            bits: 0
-        }
+impl<B> BitPack<B> {
+    #[inline]
+    pub fn new(buff: B) -> Self {
+        BitPack { buff: buff, cursor: 0, bits: 0 }
     }
 
     #[inline]
     pub fn bits(&self) -> usize {
         self.cursor * BYTE_BITS + self.bits
     }
+}
 
-    pub fn write(&mut self, mut value: u32, mut bits: usize) -> Result<(), ()> {
+impl<'a> BitPack<&'a mut [u8]> {
+    /// ```
+    /// use bitpack::BitPack;
+    ///
+    /// let mut buff = [0; 2];
+    ///
+    /// {
+    ///     let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
+    ///     bitpack.write(10, 4).unwrap();
+    ///     bitpack.write(1021, 10).unwrap();
+    ///     bitpack.write(3, 2).unwrap();
+    /// }
+    ///
+    /// assert_eq!(buff, [218, 255]);
+    /// ```
+    pub fn write(&mut self, mut value: u32, mut bits: usize) -> Result<(), usize> {
         if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.bits() + bits {
-            return Err(());
+            return Err(bits);
         }
         if bits < MAX_BITS {
             value &= (1 << bits) - 1;
@@ -41,49 +64,39 @@ impl<'a> BitPack<&'a mut [u8]> {
                 self.bits += bits;
 
                 if self.bits >= BYTE_BITS {
-                    self.flush();
+                    self.cursor += 1;
+                    self.bits = 0;
                 }
 
                 break
             }
 
-            let vv = value & (1 << bits_left) - 1;
-            self.buff[self.cursor] |= (vv as u8) << self.bits;
-            self.bits += bits_left;
-            value >>= bits_left;
-            bits -= bits_left;
-
-            self.flush();
-        }
-        Ok(())
-    }
-
-    pub fn flush(&mut self) {
-        if self.bits > 0 {
+            let bb = value & (1 << bits_left) - 1;
+            self.buff[self.cursor] |= (bb as u8) << self.bits;
             self.cursor += 1;
             self.bits = 0;
+            value >>= bits_left;
+            bits -= bits_left;
         }
+        Ok(())
     }
 }
 
 
 impl<'a> BitPack<&'a [u8]> {
-    pub fn new(buff: &[u8]) -> BitPack<&[u8]> {
-        BitPack {
-            buff: buff,
-            cursor: 0,
-            bits: 0
-        }
-    }
-
-    #[inline]
-    pub fn bits(&self) -> usize {
-        self.cursor * BYTE_BITS + self.bits
-    }
-
-    pub fn read(&mut self, mut bits: usize) -> Result<u32, ()> {
+    /// ```
+    /// use bitpack::BitPack;
+    ///
+    /// let mut buff = [218, 255];
+    ///
+    /// let mut bitpack = BitPack::<&[u8]>::new(&buff);
+    /// assert_eq!(bitpack.read(4).unwrap(), 10);
+    /// assert_eq!(bitpack.read(10).unwrap(), 1021);
+    /// assert_eq!(bitpack.read(2).unwrap(), 3);
+    /// ```
+    pub fn read(&mut self, mut bits: usize) -> Result<u32, usize> {
         if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.bits() + bits {
-            return Err(());
+            return Err(bits);
         };
 
         let mut bits_left = 0;
@@ -119,28 +132,6 @@ impl<'a> BitPack<&'a [u8]> {
 
 
 #[test]
-fn test_bitpack() {
-    let mut buff = [0; 2];
-
-    {
-        let mut bitpack = BitPack::<&mut [u8]>::new(&mut buff);
-        bitpack.write(10, 4).unwrap();
-        bitpack.write(1021, 10).unwrap();
-        bitpack.write(3, 2).unwrap();
-        bitpack.flush();
-    }
-
-    assert_eq!(buff, [218, 255]);
-
-    {
-        let mut bitpack = BitPack::<&[u8]>::new(&buff);
-        assert_eq!(bitpack.read(4).unwrap(), 10);
-        assert_eq!(bitpack.read(10).unwrap(), 1021);
-        assert_eq!(bitpack.read(2).unwrap(), 3);
-    }
-}
-
-#[test]
 fn test_lowbit() {
     let mut buff = [0; 1];
 
@@ -150,7 +141,6 @@ fn test_lowbit() {
         bitpack.write(0, 1).unwrap();
         bitpack.write(0, 1).unwrap();
         bitpack.write(1, 1).unwrap();
-        bitpack.flush();
     }
 
     {
@@ -173,7 +163,6 @@ fn test_bigbit() {
         bitpack.write(65535, 16).unwrap();
         bitpack.write(255, 8).unwrap();
         bitpack.write(65535, 16).unwrap();
-        bitpack.flush();
     }
 
     {
@@ -187,11 +176,11 @@ fn test_bigbit() {
 }
 
 #[test]
-fn test_longlowbit() {
+fn test_morelowbit() {
     let input = [
         1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0,
         1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-        0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1,
     ];
     let mut buff = [0; 8];
 
@@ -200,7 +189,6 @@ fn test_longlowbit() {
         for &b in &input[..] {
             bitpack.write(b, 1).unwrap();
         }
-        bitpack.flush();
     }
 
     {
