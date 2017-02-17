@@ -28,8 +28,27 @@ impl<B> BitPack<B> {
     }
 
     #[inline]
-    pub fn bits(&self) -> usize {
+    pub fn sum_bits(&self) -> usize {
         self.cursor * BYTE_BITS + self.bits
+    }
+
+    #[inline]
+    pub fn with_cursor(&mut self, cursor: usize) -> &mut Self {
+        self.cursor = cursor;
+        self
+    }
+
+    #[inline]
+    pub fn with_bits(&mut self, bits: usize) -> &mut Self {
+        self.bits = bits;
+        self
+    }
+}
+
+impl<B: AsRef<[u8]>> BitPack<B> {
+    #[inline]
+    pub fn as_slice(&self) -> &[u8] {
+        self.buff.as_ref()
     }
 }
 
@@ -49,7 +68,7 @@ impl<'a> BitPack<&'a mut [u8]> {
     /// assert_eq!(buff, [218, 255]);
     /// ```
     pub fn write(&mut self, mut value: u32, mut bits: usize) -> Result<(), usize> {
-        if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.bits() + bits {
+        if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
             return Err(bits);
         }
         if bits < MAX_BITS {
@@ -95,7 +114,7 @@ impl<'a> BitPack<&'a [u8]> {
     /// assert_eq!(bitpack.read(2).unwrap(), 3);
     /// ```
     pub fn read(&mut self, mut bits: usize) -> Result<u32, usize> {
-        if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.bits() + bits {
+        if bits > MAX_BITS || self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
             return Err(bits);
         };
 

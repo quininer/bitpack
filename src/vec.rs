@@ -32,7 +32,7 @@ impl BitPack<Vec<u8>> {
     pub fn write(&mut self, value: u32, bits: usize) -> Result<(), usize> {
         let len = self.buff.len();
 
-        if let Some(bits) = (self.bits() + bits).checked_sub(len * BYTE_BITS) {
+        if let Some(bits) = (self.sum_bits() + bits).checked_sub(len * BYTE_BITS) {
             self.buff.resize(len + (bits + BYTE_BITS - 1) / BYTE_BITS, 0x0);
         }
 
@@ -52,10 +52,6 @@ impl BitPack<Vec<u8>> {
 
     pub fn into_vec(self) -> Vec<u8> {
         self.buff
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        &self.buff
     }
 }
 
