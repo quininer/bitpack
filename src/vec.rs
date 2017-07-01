@@ -1,5 +1,3 @@
-#[cfg(all(not(feature = "use_std"), feature = "use_vec"))]
-use collections::Vec;
 use super::{ BYTE_BITS, BitPack };
 
 
@@ -57,7 +55,7 @@ impl BitPack<Vec<u8>> {
 
 
 #[test]
-fn test_lowbit() {
+fn test_smallbit() {
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(1);
     bitpack_vec.write(1, 1).unwrap();
     bitpack_vec.write(0, 1).unwrap();
@@ -89,7 +87,7 @@ fn test_bigbit() {
 }
 
 #[test]
-fn test_morelowbit() {
+fn test_moresmallbit() {
     let input = [
         1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0,
         1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1,

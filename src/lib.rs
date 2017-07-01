@@ -1,13 +1,6 @@
 #![cfg_attr(not(feature = "use_std"), no_std)]
-#![cfg_attr(
-    all(not(feature = "use_std"), feature = "use_vec"),
-    feature(collections)
-)]
 
-#[cfg(all(not(feature = "use_std"), feature = "use_vec"))]
-extern crate collections;
-
-#[cfg(any(feature = "use_std", feature = "use_vec"))]
+#[cfg(feature = "use_std")]
 mod vec;
 
 
@@ -90,7 +83,7 @@ impl<'a> BitPack<&'a mut [u8]> {
                 break
             }
 
-            let bb = value & (1 << bits_left) - 1;
+            let bb = value & ((1 << bits_left) - 1);
             self.buff[self.cursor] |= (bb as u8) << self.bits;
             self.cursor += 1;
             self.bits = 0;
@@ -151,7 +144,7 @@ impl<'a> BitPack<&'a [u8]> {
 
 
 #[test]
-fn test_lowbit() {
+fn test_smallbit() {
     let mut buff = [0; 1];
 
     {
@@ -195,7 +188,7 @@ fn test_bigbit() {
 }
 
 #[test]
-fn test_morelowbit() {
+fn test_moresmallbit() {
     let input = [
         1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0,
         1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1,

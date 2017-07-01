@@ -23,7 +23,7 @@ assert_eq!(buff, [218, 255]);
 }
 ```
 
-and, `use_std`/`use_vec`
+and, `use_std`
 
 ```rust
 let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(2);
